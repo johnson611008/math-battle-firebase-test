@@ -1692,7 +1692,27 @@ body.role-p1 #p2quiz{display:none!important}
 body.role-p2 #p1quiz{display:none!important}
 body.role-p1 .dual-quiz,body.role-p2 .dual-quiz{grid-template-columns:1fr}
 body.role-p1 #p2stat,body.role-p2 #p1stat{opacity:.55}
-.net-badge{position:fixed;z-index:80;right:10px;top:8px;background:#07121e;border:2px solid #ffd23f;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:900;color:#fff}
+.net-badge{
+  position:fixed;
+  z-index:80;
+  top:8px;
+  background:#07121e;
+  border:2px solid #ffd23f;
+  border-radius:999px;
+  padding:5px 10px;
+  font-size:12px;
+  font-weight:900;
+  color:#fff;
+  white-space:nowrap;
+}
+body.role-p1 .net-badge{
+  left:10px;
+  right:auto;
+}
+body.role-p2 .net-badge{
+  right:10px;
+  left:auto;
+}
 @media(max-width:650px){.net-grid{grid-template-columns:1fr}.net-lobby{padding:12px}}
 </style>
 
@@ -1725,7 +1745,7 @@ let endingShown = false;
 const start = document.getElementById("start");
 start.className = "net-lobby";
 start.innerHTML = `
-  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板同步搶答版 V7</h2>
+  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板同步搶答版 V8</h2>
   <p>兩台平板顯示相同題目；Firebase 只接受第一個按下的答案。先答對攻擊對手，先答錯自己扣 1 HP；第二位答案完全無效。</p>
   <div class="net-grid" id="netGrid">
     <div class="net-box">
@@ -1774,6 +1794,15 @@ function setRoleUI(){
   document.body.classList.add(myRole === "player1" ? "role-p1" : "role-p2");
   badge.style.display = "block";
   badge.textContent = `${myRole === "player1" ? "PLAYER 1" : "PLAYER 2"}｜房號 ${roomCode}`;
+
+  // V8：玩家 1 固定左上角；玩家 2 固定右上角。
+  if(myRole === "player1"){
+    badge.style.left = "10px";
+    badge.style.right = "auto";
+  }else{
+    badge.style.right = "10px";
+    badge.style.left = "auto";
+  }
 }
 
 function listenRoom(){
