@@ -774,14 +774,14 @@ body.role-p1 .player-quiz .prompt, body.role-p2 .player-quiz .prompt{min-height:
       <!-- 雙人各自作答區 -->
       <div class="dual-quiz">
         <div id="p1quiz" class="quiz player-quiz">
-          <div class="player-label">PLAYER 1</div>
+          <div class="player-label">⚡ 同步搶答題</div>
           <div id="p1question" class="question"></div>
           <div id="p1hint" class="formula-hint"></div>
           <div id="p1options" class="options"></div>
           <div id="p1prompt" class="prompt">玩家 1 請作答</div>
         </div>
         <div id="p2quiz" class="quiz player-quiz">
-          <div class="player-label">PLAYER 2</div>
+          <div class="player-label">⚡ 同步搶答題</div>
           <div id="p2question" class="question"></div>
           <div id="p2hint" class="formula-hint"></div>
           <div id="p2options" class="options"></div>
@@ -1390,9 +1390,76 @@ window.networkBeginGame = function(lvl, role){
 
   updateDualHUD();
   startTimer();
-  if(role === 'player1') nextPlayerRound(P1);
-  else nextPlayerRound(P2);
+  // 搶答模式：題目由 Firebase 統一同步，不在各裝置自行出題。
   return role === 'player1' ? P1 : P2;
+};
+
+/* ===== V6 Firebase 搶答模式：共用題目顯示 ===== */
+window.networkMakeQuestion = function(){
+  return makeQuestion();
+};
+
+window.networkRenderSharedQuestion = function(q, seq, role){
+  if(!q) return;
+  const P = role === 'player1' ? P1 : P2;
+  if(!P) return;
+
+  P.number = seq || 1;
+  P.answer = Number(q.answer);
+  P.locked = false;
+
+  const pre = role === 'player1' ? 'p1' : 'p2';
+  const qEl = $(pre+'question');
+  const hEl = $(pre+'hint');
+  const box = $(pre+'options');
+  const prompt = $(pre+'prompt');
+
+  qEl.innerHTML = q.question;
+  if(q.hint && level === 'easy'){
+    hEl.innerHTML = q.hint;
+    hEl.classList.add('show');
+  }else{
+    hEl.innerHTML = '';
+    hEl.classList.remove('show');
+  }
+
+  box.innerHTML = '';
+  (q.choices || []).forEach(v => {
+    const b = document.createElement('button');
+    b.className = 'option';
+    b.textContent = v;
+    b.onclick = () => window.networkBuzzAnswer(Number(v), b);
+    box.appendChild(b);
+  });
+
+  prompt.className = 'prompt';
+  prompt.textContent = `第 ${P.number} 題｜搶答開始！`;
+  $('round').textContent = `${P.number} / ${TOTAL}`;
+
+  if(window.MathJax && MathJax.typesetPromise){
+    MathJax.typesetPromise([qEl,hEl]).catch(()=>{});
+  }
+};
+
+window.networkLockSharedQuestion = function(message, correctAnswer, chosenValue){
+  const role = document.body.classList.contains('role-p1') ? 'player1' : 'player2';
+  const pre = role === 'player1' ? 'p1' : 'p2';
+  const box = $(pre+'options');
+  const prompt = $(pre+'prompt');
+  if(box) {
+    box.querySelectorAll('.option').forEach(b => {
+      b.disabled = true;
+      if(Number(b.textContent) === Number(correctAnswer)) b.classList.add('good');
+      if(chosenValue !== undefined && Number(b.textContent) === Number(chosenValue) &&
+         Number(chosenValue) !== Number(correctAnswer)) b.classList.add('bad');
+    });
+  }
+  if(prompt){
+    prompt.className = 'prompt';
+    prompt.textContent = message || '本題已結束，準備下一題…';
+  }
+  const P = role === 'player1' ? P1 : P2;
+  if(P) P.locked = true;
 };
 
 window.networkFinishBattle = function(){
@@ -1658,8 +1725,8 @@ let endingShown = false;
 const start = document.getElementById("start");
 start.className = "net-lobby";
 start.innerHTML = `
-  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板對戰測試版 V5</h2>
-  <p>PLAYER 1 建立房間；PLAYER 2 在另一台平板輸入房號加入。</p>
+  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板同步搶答版 V6</h2>
+  <p>兩台平板顯示相同題目；搶先作答者由 Firebase 判定。答對攻擊對手，答錯遭對手反擊。</p>
   <div class="net-grid" id="netGrid">
     <div class="net-box">
       <h3>PLAYER 1</h3>
@@ -1752,6 +1819,34 @@ function listenRoom(){
       }
     }
 
+    // ===== V6：兩台同步顯示完全相同的題目 =====
+    if(localStarted && d.status === "playing" && d.question && d.questionSeq){
+      if(d.questionSeq !== renderedQuestionSeq){
+        renderedQuestionSeq = d.questionSeq;
+        window.networkRenderSharedQuestion(d.question, d.questionSeq, myRole);
+      }
+
+      if(d.resolution && d.resolution.seq === d.questionSeq &&
+         d.resolution.seq !== handledResolutionSeq){
+        handledResolutionSeq = d.resolution.seq;
+        const r = d.resolution;
+        const who = r.player === 1 ? "PLAYER 1" : "PLAYER 2";
+        const msg = r.correct
+          ? `${who} 搶答正確！攻擊對手，準備下一題…`
+          : `${who} 搶答錯誤！遭對手反擊，準備下一題…`;
+        window.networkLockSharedQuestion(msg, r.answer, r.value);
+
+        // 只有房主負責送出下一題，避免兩台重複換題。
+        if(myRole === "player1" && !nextQuestionTimer){
+          const finishedSeq = d.questionSeq;
+          nextQuestionTimer = setTimeout(async ()=>{
+            nextQuestionTimer = null;
+            await publishNextQuestion(finishedSeq);
+          }, 1300);
+        }
+      }
+    }
+
     if(d.status === "finished" && d.winner && !endingShown){
       endingShown = true;
       if(window.networkFinishBattle) window.networkFinishBattle();
@@ -1816,9 +1911,16 @@ document.querySelectorAll("#hostDifficulty [data-level]").forEach(btn=>{
   btn.onclick = async () => {
     if(myRole !== "player1") return;
     const lvl = btn.dataset.level;
+    const q = window.networkMakeQuestion ? window.networkMakeQuestion() : null;
     await update(ref(db, `rooms/${roomCode}`), {
       level:lvl, status:"playing", startedAt:Date.now(),
-      "player1/hp":7, "player2/hp":7
+      questionSeq:1,
+      question:q ? {question:q.question,hint:q.hint||"",choices:q.choices,answer:q.answer} : null,
+      answerLock:null,
+      resolution:null,
+      "player1/hp":7, "player2/hp":7,
+      "player1/correct":0, "player1/wrong":0,
+      "player2/correct":0, "player2/wrong":0
     });
   };
 });
@@ -1829,56 +1931,104 @@ function beginLocalGame(lvl){
   window.__myNetworkPlayer = window.networkBeginGame(lvl, myRole);
 }
 
-// 取代原本同機雙人作答：血量改由 Firebase transaction 處理
-window.dualAnswer = async function(P, val, btn){
-  if(P.locked || !roomCode || endingShown) return;
-  const mine = myRole === "player1" ? 1 : 2;
-  if(P.side !== mine) return;
+// ===== V6 搶答模式 =====
+// Firebase 是裁判：每題只有第一個成功 transaction 的玩家能作答。
+let renderedQuestionSeq = 0;
+let handledResolutionSeq = 0;
+let nextQuestionTimer = null;
 
-  P.locked = true;
-  const pre = P.side === 1 ? "p1" : "p2";
-  const box = document.getElementById(pre+"options");
-  const prompt = document.getElementById(pre+"prompt");
-  const buttons = box.querySelectorAll(".option");
-  buttons.forEach(b=>b.disabled=true);
+async function publishNextQuestion(expectedSeq){
+  if(myRole !== "player1" || endingShown) return;
+  const rr = ref(db, `rooms/${roomCode}`);
+  const snap = await get(rr);
+  if(!snap.exists()) return;
+  const room = snap.val();
+  if(room.status !== "playing") return;
+  const currentSeq = room.questionSeq || 0;
+  if(expectedSeq !== undefined && currentSeq !== expectedSeq) return;
 
-  const isCorrect = val === P.answer;
-  if(isCorrect){
-    P.correct++;
-    btn.classList.add("good");
-    prompt.className = "prompt good";
-    prompt.textContent = `答對！PLAYER ${P.side} 攻擊對手！`;
-  }else{
-    P.wrong++;
-    btn.classList.add("bad");
-    buttons.forEach(b=>{ if(Number(b.textContent) === P.answer) b.classList.add("good"); });
-    prompt.className = "prompt bad";
-    prompt.textContent = `答錯！正解 ${P.answer}，PLAYER ${P.side} 自扣 1 HP！`;
-  }
+  const q = window.networkMakeQuestion();
+  const nextSeq = currentSeq + 1;
+  await update(rr, {
+    questionSeq: nextSeq,
+    question: {
+      question: q.question,
+      hint: q.hint || "",
+      choices: q.choices,
+      answer: q.answer
+    },
+    answerLock: null,
+    resolution: null
+  });
+}
 
-  const roomRef = ref(db, `rooms/${roomCode}`);
-  let actionForAnimation = P.side === 1 ? "player" : "cpu";
+window.networkBuzzAnswer = async function(val, btn){
+  if(!roomCode || endingShown || !localStarted) return;
 
-  await runTransaction(roomRef, room => {
-    if(!room || room.status !== "playing") return room;
+  const rr = ref(db, `rooms/${roomCode}`);
+  const snap = await get(rr);
+  if(!snap.exists()) return;
+  const before = snap.val();
+  if(before.status !== "playing" || !before.question || before.answerLock) return;
 
-    const selfKey = P.side === 1 ? "player1" : "player2";
-    const enemyKey = P.side === 1 ? "player2" : "player1";
-    const targetKey = isCorrect ? enemyKey : selfKey;
+  const seq = before.questionSeq || 0;
+  const correctAnswer = Number(before.question.answer);
+  const isCorrect = Number(val) === correctAnswer;
+  const meNum = myRole === "player1" ? 1 : 2;
+  const selfKey = myRole;
+  const enemyKey = myRole === "player1" ? "player2" : "player1";
 
-    room[targetKey].hp = Math.max(0, (room[targetKey].hp ?? 7) - 1);
-    room[selfKey].correct = P.correct;
-    room[selfKey].wrong = P.wrong;
+  // 先鎖本機按鈕，避免連點；若沒搶到，Firebase listener 會顯示真正結果。
+  const pre = myRole === "player1" ? "p1" : "p2";
+  document.querySelectorAll(`#${pre}options .option`).forEach(b=>b.disabled=true);
+
+  let wonRace = false;
+  const result = await runTransaction(rr, room => {
+    if(!room || room.status !== "playing") return;
+    if((room.questionSeq || 0) !== seq) return;
+    if(room.answerLock) return;
+
+    room.answerLock = {
+      seq,
+      by: selfKey,
+      player: meNum,
+      value: Number(val),
+      correct: isCorrect,
+      at: Date.now()
+    };
+
+    room.player1 = room.player1 || {hp:7,correct:0,wrong:0};
+    room.player2 = room.player2 || {hp:7,correct:0,wrong:0};
+
+    if(isCorrect){
+      room[selfKey].correct = (room[selfKey].correct || 0) + 1;
+      room[enemyKey].hp = Math.max(0, (room[enemyKey].hp ?? 7) - 1);
+    }else{
+      room[selfKey].wrong = (room[selfKey].wrong || 0) + 1;
+      // 搶答答錯：由對手反擊，因此答錯者自己扣 1 HP。
+      room[selfKey].hp = Math.max(0, (room[selfKey].hp ?? 7) - 1);
+    }
+
+    const attacker = isCorrect
+      ? (meNum === 1 ? "player" : "cpu")
+      : (meNum === 1 ? "cpu" : "player");
 
     room.action = room.action || {seq:0};
     room.action.seq = (room.action.seq || 0) + 1;
-    // 答錯時，舞台上仍呈現「對手反擊」的視覺邏輯
-    room.action.attacker = isCorrect
-      ? (P.side === 1 ? "player" : "cpu")
-      : (P.side === 1 ? "cpu" : "player");
+    room.action.attacker = attacker;
     room.action.by = selfKey;
     room.action.correct = isCorrect;
     room.action.at = Date.now();
+
+    room.resolution = {
+      seq,
+      by: selfKey,
+      player: meNum,
+      value: Number(val),
+      correct: isCorrect,
+      answer: correctAnswer,
+      at: Date.now()
+    };
 
     if(room.player1.hp <= 0 || room.player2.hp <= 0){
       room.status = "finished";
@@ -1888,11 +2038,11 @@ window.dualAnswer = async function(P, val, btn){
     return room;
   });
 
-  setTimeout(()=>{
-    if(!endingShown && localStarted){
-      window.nextPlayerRound(P);
-    }
-  },1600);
+  wonRace = result.committed;
+  if(!wonRace){
+    // 沒搶到時不做任何扣血；等 Firebase 同步真正的搶答者結果。
+    return;
+  }
 };
 
 function showNetworkWinner(d){
