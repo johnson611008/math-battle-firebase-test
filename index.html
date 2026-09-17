@@ -1329,6 +1329,42 @@ function freshPlayer(side){
   return {side, number:0, correct:0, wrong:0, answer:null, locked:false};
 }
 
+/* ===== Firebase 雙平板橋接：讓 module 與原遊戲共用同一組狀態 ===== */
+window.networkApplyHP = function(hp1, hp2){
+  if(typeof hp1 === 'number') pHP = hp1;
+  if(typeof hp2 === 'number') cHP = hp2;
+  updateDualHUD();
+};
+
+window.networkBeginGame = function(lvl, role){
+  level = lvl;
+  usedQuestionKeys = new Set();
+  pHP = MAX_HP;
+  cHP = MAX_HP;
+  P1 = freshPlayer(1);
+  P2 = freshPlayer(2);
+  battleOver = false;
+  battleEndAt = null;
+  startedAt = Date.now();
+
+  $('start').style.display = 'none';
+  $('game').style.display = 'block';
+  $('result').style.display = 'none';
+  $('difficulty').textContent = ({easy:'簡單',medium:'中等',hard:'困難'})[level] || '簡單';
+
+  updateDualHUD();
+  startTimer();
+  if(role === 'player1') nextPlayerRound(P1);
+  else nextPlayerRound(P2);
+  return role === 'player1' ? P1 : P2;
+};
+
+window.networkFinishBattle = function(){
+  battleOver = true;
+  battleEndAt = Date.now();
+  disableAllAnswers();
+};
+
 startGame = function(lvl){
   level = lvl;
   usedQuestionKeys = new Set();
@@ -1579,7 +1615,7 @@ let endingShown = false;
 const start = document.getElementById("start");
 start.className = "net-lobby";
 start.innerHTML = `
-  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板連線版</h2>
+  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板對戰測試版</h2>
   <p>PLAYER 1 建立房間；PLAYER 2 在另一台平板輸入房號加入。</p>
   <div class="net-grid" id="netGrid">
     <div class="net-box">
@@ -1639,9 +1675,7 @@ function listenRoom(){
     const p2 = d.player2 || {};
 
     // Firebase 是唯一血量來源
-    if(typeof p1.hp === "number") window.pHP = p1.hp;
-    if(typeof p2.hp === "number") window.cHP = p2.hp;
-    if(window.updateDualHUD) window.updateDualHUD();
+    if(window.networkApplyHP) window.networkApplyHP(p1.hp, p2.hp);
 
     if(!localStarted){
       $n("netStatus").textContent = p1.connected && p2.connected
@@ -1667,8 +1701,7 @@ function listenRoom(){
 
     if(d.status === "finished" && d.winner && !endingShown){
       endingShown = true;
-      window.battleOver = true;
-      if(window.timerId) clearInterval(window.timerId);
+      if(window.networkFinishBattle) window.networkFinishBattle();
       setTimeout(() => showNetworkWinner(d), 900);
     }
   });
@@ -1740,31 +1773,12 @@ document.querySelectorAll("#hostDifficulty [data-level]").forEach(btn=>{
 function beginLocalGame(lvl){
   localStarted = true;
   endingShown = false;
-  window.level = lvl;
-  window.usedQuestionKeys = new Set();
-  window.pHP = 7;
-  window.cHP = 7;
-  window.P1 = window.freshPlayer ? window.freshPlayer(1) : {side:1,number:0,correct:0,wrong:0,answer:null,locked:false};
-  window.P2 = window.freshPlayer ? window.freshPlayer(2) : {side:2,number:0,correct:0,wrong:0,answer:null,locked:false};
-  window.battleOver = false;
-  window.startedAt = Date.now();
-
-  start.style.display = "none";
-  document.getElementById("game").style.display = "block";
-  document.getElementById("result").style.display = "none";
-  document.getElementById("difficulty").textContent = ({easy:"簡單",medium:"中等",hard:"困難"})[lvl];
-
-  window.updateDualHUD();
-  window.startTimer();
-
-  // 每台平板只產生自己的題目
-  if(myRole === "player1") window.nextPlayerRound(window.P1);
-  else window.nextPlayerRound(window.P2);
+  window.__myNetworkPlayer = window.networkBeginGame(lvl, myRole);
 }
 
 // 取代原本同機雙人作答：血量改由 Firebase transaction 處理
 window.dualAnswer = async function(P, val, btn){
-  if(window.battleOver || P.locked || !roomCode) return;
+  if(P.locked || !roomCode || endingShown) return;
   const mine = myRole === "player1" ? 1 : 2;
   if(P.side !== mine) return;
 
@@ -1822,7 +1836,7 @@ window.dualAnswer = async function(P, val, btn){
   });
 
   setTimeout(()=>{
-    if(!window.battleOver && localStarted){
+    if(!endingShown && localStarted){
       window.nextPlayerRound(P);
     }
   },1600);
