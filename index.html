@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Firebase 雙平板連線測試</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:"Microsoft JhengHei",system-ui,sans-serif;background:#08111d;color:#fff;display:grid;place-items:center;padding:20px}
+  .card{width:min(760px,100%);background:#102235;border:3px solid #31577d;border-radius:20px;padding:24px;box-shadow:0 16px 40px #0008}
+  h1{text-align:center;color:#ffd23f;margin:0 0 8px}
+  .sub{text-align:center;color:#c8d8e8;margin-bottom:20px}
+  .setup{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .box{background:#0a1827;border:2px solid #294867;border-radius:14px;padding:16px}
+  button,input{width:100%;min-height:52px;border-radius:10px;font-size:18px;font-weight:800}
+  button{border:0;background:#176b4b;color:#fff;cursor:pointer;margin-top:10px}
+  button.secondary{background:#2459c7}
+  button.danger{background:#a52b25}
+  input{border:2px solid #7191ad;background:#fff;color:#111;padding:8px 12px;text-align:center;letter-spacing:6px}
+  #roomInfo{display:none;text-align:center;margin-top:18px}
+  .room{font-size:38px;font-weight:900;color:#ffe337;letter-spacing:8px}
+  .status{margin:12px 0;padding:10px;border-radius:10px;background:#172c40}
+  .hpgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  .player{background:#07121e;border:2px solid #355a7d;border-radius:14px;padding:16px}
+  .hearts{font-size:27px;min-height:38px;word-break:break-all}
+  .me{outline:3px solid #ffd23f}
+  .log{margin-top:14px;color:#b9cadd;font-size:14px;min-height:22px}
+  @media(max-width:620px){.setup,.hpgrid{grid-template-columns:1fr}.card{padding:16px}.room{font-size:32px}}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚡ 雙平板 Firebase 連線測試</h1>
+  <div class="sub">先確認「建立房間 → 加入房間 → 7 滴血即時同步」</div>
+
+  <div id="setup" class="setup">
+    <div class="box">
+      <h2>PLAYER 1</h2>
+      <p>第一台裝置按這裡建立 4 位數房間。</p>
+      <button id="createBtn">建立對戰房間</button>
+    </div>
+    <div class="box">
+      <h2>PLAYER 2</h2>
+      <p>第二台裝置輸入第一台顯示的房號。</p>
+      <input id="roomInput" inputmode="numeric" maxlength="4" placeholder="房號">
+      <button id="joinBtn" class="secondary">加入對戰房間</button>
+    </div>
+  </div>
+
+  <section id="roomInfo">
+    <div>目前房號</div>
+    <div id="roomCode" class="room">----</div>
+    <div id="status" class="status">連線中…</div>
+
+    <div class="hpgrid">
+      <div id="p1Card" class="player">
+        <h2>PLAYER 1</h2>
+        <div id="p1State">等待連線</div>
+        <div id="p1Hearts" class="hearts">❤️❤️❤️❤️❤️❤️❤️</div>
+        <div id="p1Hp">7 / 7</div>
+        <button id="hitP1" class="danger">測試：PLAYER 1 扣 1 滴血</button>
+      </div>
+      <div id="p2Card" class="player">
+        <h2>PLAYER 2</h2>
+        <div id="p2State">等待連線</div>
+        <div id="p2Hearts" class="hearts">❤️❤️❤️❤️❤️❤️❤️</div>
+        <div id="p2Hp">7 / 7</div>
+        <button id="hitP2" class="danger">測試：PLAYER 2 扣 1 滴血</button>
+      </div>
+    </div>
+    <div id="log" class="log"></div>
+  </section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+  getDatabase, ref, get, set, update, onValue, runTransaction
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBm52fxefQU3JCmyEnCAtqvrUgZguBgiEI",
+  authDomain: "math-battle-game-8d3f0.firebaseapp.com",
+  databaseURL: "https://math-battle-game-8d3f0-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "math-battle-game-8d3f0",
+  storageBucket: "math-battle-game-8d3f0.firebasestorage.app",
+  messagingSenderId: "386611139677",
+  appId: "1:386611139677:web:d3dd978c394fd9b73969b4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let room = "";
+let role = "";
+let stopRoomListener = null;
+
+const $ = id => document.getElementById(id);
+const log = msg => $("log").textContent = msg;
+
+function hearts(hp){
+  return "❤️".repeat(Math.max(0, hp)) + "🖤".repeat(Math.max(0, 7-hp));
+}
+
+async function makeUniqueRoom(){
+  for(let i=0;i<20;i++){
+    const code = String(Math.floor(1000 + Math.random()*9000));
+    const snap = await get(ref(db, `rooms/${code}`));
+    if(!snap.exists()) return code;
+  }
+  throw new Error("暫時無法產生房號，請再試一次。");
+}
+
+function enterRoom(code, who){
+  room = code;
+  role = who;
+  $("setup").style.display = "none";
+  $("roomInfo").style.display = "block";
+  $("roomCode").textContent = code;
+  $("p1Card").classList.toggle("me", who === "player1");
+  $("p2Card").classList.toggle("me", who === "player2");
+
+  if(stopRoomListener) stopRoomListener();
+  stopRoomListener = onValue(ref(db, `rooms/${code}`), snap => {
+    if(!snap.exists()){
+      $("status").textContent = "⚠️ 房間不存在或已被刪除";
+      return;
+    }
+    const data = snap.val();
+    const p1 = data.player1 || {};
+    const p2 = data.player2 || {};
+    const hp1 = Number.isFinite(p1.hp) ? p1.hp : 7;
+    const hp2 = Number.isFinite(p2.hp) ? p2.hp : 7;
+
+    $("p1State").textContent = p1.connected ? "🟢 已連線" : "⚪ 未連線";
+    $("p2State").textContent = p2.connected ? "🟢 已連線" : "⚪ 等待加入";
+    $("p1Hearts").textContent = hearts(hp1);
+    $("p2Hearts").textContent = hearts(hp2);
+    $("p1Hp").textContent = `${hp1} / 7`;
+    $("p2Hp").textContent = `${hp2} / 7`;
+
+    if(p1.connected && p2.connected){
+      $("status").textContent = "🟢 雙方已連線！可以測試即時扣血。";
+    } else {
+      $("status").textContent = who === "player1"
+        ? "🟡 房間已建立，等待 PLAYER 2 輸入房號…"
+        : "🟡 正在等待雙方連線…";
+    }
+  }, err => {
+    $("status").textContent = "🔴 Firebase 讀取失敗";
+    log(err.message);
+  });
+}
+
+$("createBtn").addEventListener("click", async () => {
+  try{
+    $("createBtn").disabled = true;
+    const code = await makeUniqueRoom();
+    await set(ref(db, `rooms/${code}`), {
+      createdAt: Date.now(),
+      status: "waiting",
+      player1: { connected: true, hp: 7 },
+      player2: { connected: false, hp: 7 }
+    });
+    enterRoom(code, "player1");
+  }catch(err){
+    alert("建立房間失敗：" + err.message);
+    $("createBtn").disabled = false;
+  }
+});
+
+$("joinBtn").addEventListener("click", async () => {
+  const code = $("roomInput").value.trim();
+  if(!/^\d{4}$/.test(code)){
+    alert("請輸入 4 位數房號。");
+    return;
+  }
+  try{
+    $("joinBtn").disabled = true;
+    const roomRef = ref(db, `rooms/${code}`);
+    const snap = await get(roomRef);
+    if(!snap.exists()){
+      alert("找不到這個房間，請確認房號。");
+      $("joinBtn").disabled = false;
+      return;
+    }
+    const data = snap.val();
+    if(data.player2?.connected){
+      alert("這個房間已經有 PLAYER 2。");
+      $("joinBtn").disabled = false;
+      return;
+    }
+    await update(roomRef, {
+      "player2/connected": true,
+      "player2/hp": 7,
+      status: "ready"
+    });
+    enterRoom(code, "player2");
+  }catch(err){
+    alert("加入房間失敗：" + err.message);
+    $("joinBtn").disabled = false;
+  }
+});
+
+async function loseHp(player){
+  if(!room) return;
+  try{
+    await runTransaction(ref(db, `rooms/${room}/${player}/hp`), hp => {
+      if(hp === null) return 7;
+      return Math.max(0, hp - 1);
+    });
+    log(`${player === "player1" ? "PLAYER 1" : "PLAYER 2"} 已扣 1 滴血；請觀察另一台裝置是否同步。`);
+  }catch(err){
+    log("扣血失敗：" + err.message);
+  }
+}
+
+$("hitP1").addEventListener("click", () => loseHp("player1"));
+$("hitP2").addEventListener("click", () => loseHp("player2"));
+</script>
+</body>
+</html>
