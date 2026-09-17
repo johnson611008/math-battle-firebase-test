@@ -730,9 +730,9 @@ html, body {
       <!-- 雙人統計數據條 -->
       <div class="stats dual-stats">
         <div class="stat">難度：<span id="difficulty" class="yellow">簡單</span></div>
-        <div class="stat">P1 ✔ <span id="p1correct" class="green">0</span>　正確率 <span id="p1accuracy">0%</span></div>
+        <div class="stat">P1 ✔ <span id="p1correct" class="green">0</span>　✘ <span id="p1wrong" class="red">0</span></div>
         <div class="stat">⏱ <span id="timer">00:00</span></div>
-        <div class="stat">P2 ✔ <span id="p2correct" class="green">0</span>　正確率 <span id="p2accuracy">0%</span></div>
+        <div class="stat">P2 ✔ <span id="p2correct" class="green">0</span>　✘ <span id="p2wrong" class="red">0</span></div>
       </div>
 
       <!-- 雙人各自作答區 -->
@@ -1304,7 +1304,7 @@ function finishGame() {
   $('resultText').innerHTML = `
     <p style="font-size:16px; line-height:1.8; color:#e1ecf7; margin:15px 0;">
       答對題數：<strong style="color:#42eb82;">${correct}</strong> / ${TOTAL} 題<br>
-      正確率：<strong style="color:#ffe23c;">${acc}%</strong><br>
+
       剩餘血量：PLAYER <strong style="color:#ff5648;">${pHP}</strong> vs CPU <strong>${cHP}</strong><br>
       總花費時間：<strong>${timeStr}</strong>
     </p>
@@ -1546,9 +1546,9 @@ function showBattleWinner(){
     </div>
     <p style="font-size:16px;line-height:1.9;color:#e1ecf7;margin:10px 0;">
       PLAYER 1：答對 <strong style="color:#42eb82">${P1.correct}</strong> 題，
-      正確率 <strong>${a1}%</strong>，剩餘 <strong style="color:#ff5648">${pHP} HP</strong><br>
+      答錯 <strong style="color:#ff7a70">${P1.wrong}</strong> 題，剩餘 <strong style="color:#ff5648">${pHP} HP</strong><br>
       PLAYER 2：答對 <strong style="color:#42eb82">${P2.correct}</strong> 題，
-      正確率 <strong>${a2}%</strong>，剩餘 <strong style="color:#ff5648">${cHP} HP</strong><br>
+      答錯 <strong style="color:#ff7a70">${P2.wrong}</strong> 題，剩餘 <strong style="color:#ff5648">${cHP} HP</strong><br>
       對戰時間：<strong>${timeStr}</strong><br>
       <small>PLAYER ${loser} 血量歸零，對戰立即結束。</small>
     </p>`;
@@ -1673,6 +1673,16 @@ function listenRoom(){
     const d = snap.val();
     const p1 = d.player1 || {};
     const p2 = d.player2 || {};
+
+    // Firebase 同步兩位玩家的答對／答錯戰績（兩台平板顯示一致）
+    const p1CorrectEl = document.getElementById("p1correct");
+    const p1WrongEl = document.getElementById("p1wrong");
+    const p2CorrectEl = document.getElementById("p2correct");
+    const p2WrongEl = document.getElementById("p2wrong");
+    if(p1CorrectEl) p1CorrectEl.textContent = p1.correct || 0;
+    if(p1WrongEl) p1WrongEl.textContent = p1.wrong || 0;
+    if(p2CorrectEl) p2CorrectEl.textContent = p2.correct || 0;
+    if(p2WrongEl) p2WrongEl.textContent = p2.wrong || 0;
 
     // Firebase 是唯一血量來源
     if(window.networkApplyHP) window.networkApplyHP(p1.hp, p2.hp);
@@ -1847,10 +1857,6 @@ function showNetworkWinner(d){
   const me = myRole === "player1" ? 1 : 2;
   const p1 = d.player1 || {};
   const p2 = d.player2 || {};
-  const p1n = (p1.correct||0)+(p1.wrong||0);
-  const p2n = (p2.correct||0)+(p2.wrong||0);
-  const a1 = p1n ? Math.round((p1.correct||0)/p1n*100) : 0;
-  const a2 = p2n ? Math.round((p2.correct||0)/p2n*100) : 0;
 
   document.getElementById("resultTitle").textContent =
     winner === me ? `🏆 YOU WIN！PLAYER ${winner} 勝利` : `PLAYER ${winner} WIN！`;
@@ -1861,9 +1867,9 @@ function showNetworkWinner(d){
     </div>
     <p style="font-size:16px;line-height:1.9;color:#e1ecf7">
       PLAYER 1：答對 <strong style="color:#42eb82">${p1.correct||0}</strong> 題，
-      正確率 <strong>${a1}%</strong>，剩餘 <strong style="color:#ff5648">${p1.hp??0} HP</strong><br>
+      答錯 <strong style="color:#ff7a70">${p1.wrong||0}</strong> 題，剩餘 <strong style="color:#ff5648">${p1.hp??0} HP</strong><br>
       PLAYER 2：答對 <strong style="color:#42eb82">${p2.correct||0}</strong> 題，
-      正確率 <strong>${a2}%</strong>，剩餘 <strong style="color:#ff5648">${p2.hp??0} HP</strong><br>
+      答錯 <strong style="color:#ff7a70">${p2.wrong||0}</strong> 題，剩餘 <strong style="color:#ff5648">${p2.hp??0} HP</strong><br>
       <small>任一玩家血量歸零，兩台平板同步結束。</small>
     </p>`;
   document.getElementById("result").style.display = "flex";
