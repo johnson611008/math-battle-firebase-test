@@ -667,6 +667,42 @@ html, body {
 @media(max-width:760px){.dual-quiz{gap:4px;padding:4px}.player-quiz{padding:4px}.player-quiz .options{gap:4px}.dual-stats{gap:4px}.stat{padding:2px 5px}}
 @media(max-height:700px){.dual-quiz{padding:4px}.player-quiz .question{min-height:34px;font-size:16px}.player-quiz .option{min-height:32px;font-size:14px}.player-label{margin-bottom:2px}.player-quiz .prompt{min-height:18px}}
 </style>
+
+<style id="dual-tablet-compact-v4">
+/* ===== V4 雙平板滿版壓縮：確保題目與四個選項同屏可見 ===== */
+body.role-p1 .app, body.role-p2 .app{padding:2px 6px;}
+body.role-p1 .game-title, body.role-p2 .game-title{display:none;}
+body.role-p1 #game, body.role-p2 #game{height:100dvh;min-height:0;}
+body.role-p1 .arcade, body.role-p2 .arcade{height:100dvh;max-height:100dvh;}
+body.role-p1 .hud, body.role-p2 .hud{padding:3px 10px;grid-template-columns:1fr 82px 1fr;gap:7px;}
+body.role-p1 .hud-name, body.role-p2 .hud-name{font-size:clamp(12px,1.5vw,16px);margin-bottom:1px;}
+body.role-p1 .hpbox, body.role-p2 .hpbox{height:14px;border-width:2px;}
+body.role-p1 .hpsub, body.role-p2 .hpsub{font-size:10px;margin-top:1px;}
+body.role-p1 .round strong, body.role-p2 .round strong{height:30px;font-size:18px;border-width:2px;}
+body.role-p1 .round small, body.role-p2 .round small{font-size:9px;}
+body.role-p1 .stage, body.role-p2 .stage{flex:0 0 clamp(155px,31dvh,245px);min-height:0;}
+body.role-p1 .stage-title, body.role-p2 .stage-title{font-size:clamp(22px,3vw,38px);top:5%;}
+body.role-p1 #player.real-fighter, body.role-p1 #cpu.real-fighter,
+body.role-p2 #player.real-fighter, body.role-p2 #cpu.real-fighter{height:82% !important;max-width:20% !important;}
+body.role-p1 .stats, body.role-p2 .stats{padding:3px 8px;min-height:34px;gap:6px;}
+body.role-p1 .stat, body.role-p2 .stat{padding:2px 8px;font-size:clamp(10px,1.25vw,13px);}
+body.role-p1 .dual-quiz, body.role-p2 .dual-quiz{flex:1 1 auto;min-height:0;padding:4px;overflow:hidden;}
+body.role-p1 .player-quiz, body.role-p2 .player-quiz{height:100%;min-height:0;padding:4px 8px 5px;display:flex;flex-direction:column;}
+body.role-p1 .player-label, body.role-p2 .player-label{font-size:clamp(12px,1.5vw,16px);margin:0 0 2px;}
+body.role-p1 .player-quiz .question, body.role-p2 .player-quiz .question{min-height:36px;padding:2px 8px;margin-bottom:2px;font-size:clamp(17px,2vw,24px);}
+body.role-p1 .player-quiz .formula-hint, body.role-p2 .player-quiz .formula-hint{margin-bottom:2px;padding:2px 7px;font-size:clamp(9px,1vw,11px);}
+body.role-p1 .player-quiz .options, body.role-p2 .player-quiz .options{flex:1 1 auto;min-height:76px;gap:5px;grid-template-rows:1fr 1fr;}
+body.role-p1 .player-quiz .option, body.role-p2 .player-quiz .option{min-height:34px;font-size:clamp(14px,1.7vw,19px);}
+body.role-p1 .player-quiz .prompt, body.role-p2 .player-quiz .prompt{min-height:20px;margin-top:3px;padding:2px;font-size:clamp(9px,1vw,11px);}
+@media (max-height:760px){
+ body.role-p1 .stage,body.role-p2 .stage{flex-basis:27dvh;}
+ body.role-p1 .stats,body.role-p2 .stats{min-height:29px;padding:2px 6px;}
+ body.role-p1 .player-quiz .question,body.role-p2 .player-quiz .question{min-height:30px;font-size:16px;}
+ body.role-p1 .player-quiz .option,body.role-p2 .player-quiz .option{min-height:29px;font-size:14px;}
+ body.role-p1 .player-quiz .prompt,body.role-p2 .player-quiz .prompt{min-height:17px;margin-top:2px;}
+}
+</style>
+
 </head>
 <body>
 <div class="app">
