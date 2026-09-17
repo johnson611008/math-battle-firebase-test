@@ -773,14 +773,14 @@ body.role-p1 .player-quiz .prompt, body.role-p2 .player-quiz .prompt{min-height:
 
       <!-- 雙人各自作答區 -->
       <div class="dual-quiz">
-        <div class="quiz player-quiz">
+        <div id="p1quiz" class="quiz player-quiz">
           <div class="player-label">PLAYER 1</div>
           <div id="p1question" class="question"></div>
           <div id="p1hint" class="formula-hint"></div>
           <div id="p1options" class="options"></div>
           <div id="p1prompt" class="prompt">玩家 1 請作答</div>
         </div>
-        <div class="quiz player-quiz">
+        <div id="p2quiz" class="quiz player-quiz">
           <div class="player-label">PLAYER 2</div>
           <div id="p2question" class="question"></div>
           <div id="p2hint" class="formula-hint"></div>
@@ -1433,13 +1433,18 @@ function updateDualHUD(){
   const r2 = P2 ? P2.number : 0;
   $('round').textContent = `${Math.max(r1,r2)} / ${TOTAL}`;
 
+  // 連線對戰只顯示答對 / 答錯，不計算正確率
   if(P1){
-    $('p1correct').textContent = P1.correct;
-    $('p1accuracy').textContent = `${P1.number ? Math.round(P1.correct/P1.number*100) : 0}%`;
+    const c1 = $('p1correct');
+    const w1 = $('p1wrong');
+    if(c1) c1.textContent = P1.correct;
+    if(w1) w1.textContent = P1.wrong;
   }
   if(P2){
-    $('p2correct').textContent = P2.correct;
-    $('p2accuracy').textContent = `${P2.number ? Math.round(P2.correct/P2.number*100) : 0}%`;
+    const c2 = $('p2correct');
+    const w2 = $('p2wrong');
+    if(c2) c2.textContent = P2.correct;
+    if(w2) w2.textContent = P2.wrong;
   }
 }
 
@@ -1487,6 +1492,8 @@ function nextPlayerRound(P){
   }
   updateDualHUD();
 }
+
+window.nextPlayerRound = nextPlayerRound;
 
 function disableAllAnswers(){
   document.querySelectorAll('#p1options .option, #p2options .option').forEach(b => b.disabled = true);
@@ -1602,7 +1609,7 @@ restart = function(){
 </script>
 
 <style>
-/* ===== Firebase 雙平板連線版 ===== */
+/* ===== Firebase 雙平板連線版 V5：真正雙裝置獨立作答 ===== */
 .net-lobby{max-width:900px;margin:auto;width:96%;border:4px solid #32465b;border-radius:18px;padding:18px;background:linear-gradient(160deg,#142238,#09111d 70%);text-align:center}
 .net-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
 .net-box{border:2px solid #365a7d;border-radius:12px;padding:14px;background:#081522}
@@ -1651,7 +1658,7 @@ let endingShown = false;
 const start = document.getElementById("start");
 start.className = "net-lobby";
 start.innerHTML = `
-  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板對戰測試版</h2>
+  <h2>⚡ 乘法公式街機格鬥挑戰－雙平板對戰測試版 V5</h2>
   <p>PLAYER 1 建立房間；PLAYER 2 在另一台平板輸入房號加入。</p>
   <div class="net-grid" id="netGrid">
     <div class="net-box">
