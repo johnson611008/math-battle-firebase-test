@@ -60,6 +60,10 @@ html, body {
 .game-title .bolt { color: #ff713e; }
 
 /* 開始畫面 */
+/* Firebase 模組載入前，先隱藏舊的難度選擇畫面，避免進站時閃現約 0.5 秒。
+   模組載入後會把 #start 改成 .net-lobby，因此連線大廳會正常顯示。 */
+#start.start-screen { display: none !important; }
+
 .start-screen {
   border: 4px solid #32465b;
   border-radius: 18px;
