@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>教師監看｜乘法公式街機格鬥挑戰</title>
+<style>
+:root{--bg:#07111d;--panel:#0e1b2b;--line:#2b4664;--gold:#ffd23f;--green:#42eb82;--red:#ff6b61;--text:#eef6ff;--muted:#9db0c3}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:linear-gradient(160deg,#06101b,#0a1726 55%,#07111d);color:var(--text);font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif}
+body{padding:18px}.wrap{max-width:1300px;margin:auto}
+header{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+h1{margin:0;color:var(--gold);font-size:clamp(24px,3vw,36px);text-shadow:0 2px #7a3d00}.sub{margin-top:5px;color:var(--muted);font-size:14px}
+.actions,.filters{display:flex;gap:8px;flex-wrap:wrap}button,a.btn{border:1px solid #49698d;border-radius:10px;background:#13273d;color:#fff;padding:9px 12px;font-weight:900;text-decoration:none;cursor:pointer}
+button:hover,a.btn:hover{border-color:var(--gold)}.cards{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin:14px 0}
+.card{background:linear-gradient(145deg,#122338,#0b1726);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:0 8px 20px #0004}.card b{display:block;font-size:28px;margin-top:3px}.card span{font-size:12px;color:var(--muted)}
+.toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:14px 0}.filters button.active{background:#314b68;border-color:var(--gold);color:#fff1a0}.statusline{font-size:13px;color:var(--muted)}
+.tablebox{border:1px solid var(--line);border-radius:15px;overflow:auto;background:#0a1523;box-shadow:0 12px 30px #0005}table{width:100%;border-collapse:collapse;min-width:980px}
+th,td{padding:11px 10px;border-bottom:1px solid #21374e;text-align:center;white-space:nowrap}th{position:sticky;top:0;background:#102239;color:#cfe3f6;font-size:12px;z-index:2}tbody tr:hover{background:#102033}
+.room{font-size:18px;font-weight:1000;color:var(--gold)}.badge{display:inline-block;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.waiting{background:#4b3d14;color:#ffe58a}.playing{background:#123f2b;color:#70f3a7}.finished{background:#442022;color:#ffaba5}
+.joined{color:var(--green);font-weight:900}.notjoined{color:#8796a6}.hp{font-weight:1000}.hp.low{color:var(--red)}.hp.ok{color:var(--green)}.correct{color:var(--green);font-weight:900}.wrong{color:var(--red);font-weight:900}
+.empty{padding:38px!important;color:var(--muted)}.note{margin-top:12px;color:#91a5b9;font-size:12px;line-height:1.6}
+@media(max-width:700px){body{padding:10px}.cards{grid-template-columns:1fr 1fr}.card b{font-size:23px}}
+</style>
+</head>
+<body><div class="wrap">
+<header><div><h1>🎓 教師即時監看</h1><div class="sub">乘法公式街機格鬥挑戰｜預設只顯示今天建立的房間</div></div>
+<div class="actions"><a class="btn" href="index.html">← 回遊戲首頁</a><button id="refreshBtn">↻ 重新整理畫面</button></div></header>
+
+<section class="cards">
+<div class="card"><span>今日房間</span><b id="total">0</b></div>
+<div class="card"><span>今日等待中</span><b id="waiting">0</b></div>
+<div class="card"><span>今日對戰中</span><b id="playing">0</b></div>
+<div class="card"><span>今日已結束</span><b id="finished">0</b></div>
+</section>
+
+<div class="toolbar"><div class="filters">
+<button class="filter active" data-filter="today">今天建立</button>
+<button class="filter" data-filter="playing">對戰中</button>
+<button class="filter" data-filter="waiting">等待中</button>
+<button class="filter" data-filter="finished">已結束</button>
+<button class="filter" data-filter="all">全部歷史</button>
+</div><div id="connectionStatus" class="statusline">Firebase 連線中…</div></div>
+
+<div class="tablebox"><table><thead><tr>
+<th>房號</th><th>狀態</th><th>玩家一姓名</th><th>玩家二姓名</th><th>玩家一 HP</th><th>玩家二 HP</th><th>目前題號</th><th>玩家一 答對 / 答錯</th><th>玩家二 答對 / 答錯</th><th>難度</th><th>最近活動</th>
+</tr></thead><tbody id="roomRows"><tr><td colspan="11" class="empty">正在讀取房間資料…</td></tr></tbody></table></div>
+<div class="note">※ 上方四個統計數字只計算今天建立的房間；按「全部歷史」仍可查看之前的測試紀錄。<br>※ 本頁只讀取 Firebase 資料，不會修改學生對戰內容。</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+const firebaseConfig={apiKey:"AIzaSyBm52fxefQU3JCmyEnCAtqvrUgZguBgiEI",authDomain:"math-battle-game-8d3f0.firebaseapp.com",databaseURL:"https://math-battle-game-8d3f0-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"math-battle-game-8d3f0",storageBucket:"math-battle-game-8d3f0.firebasestorage.app",messagingSenderId:"386611139677",appId:"1:386611139677:web:d3dd978c394fd9b73969b4"};
+const app=initializeApp(firebaseConfig),db=getDatabase(app);
+let rooms={},currentFilter="today";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+function statusLabel(s){if(s==="playing")return["對戰中","playing"];if(s==="finished")return["已結束","finished"];return["等待中","waiting"]}
+function levelLabel(l){return({easy:"簡單",medium:"中等",hard:"困難"})[l]||"—"}
+function recentAt(r){return r.finishedAt||r.resolution?.at||r.action?.at||r.startedAt||r.createdAt||0}
+function timeText(ms){if(!ms)return"—";return new Intl.DateTimeFormat("zh-TW",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date(ms))}
+function isToday(ms){if(!ms)return false;const d=new Date(ms),n=new Date();return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate()}
+function visibleEntries(){return Object.entries(rooms).filter(([c,r])=>{if(currentFilter==="all")return true;if(currentFilter==="today")return isToday(r.createdAt);return isToday(r.createdAt)&&(r.status||"waiting")===currentFilter}).sort((a,b)=>recentAt(b[1])-recentAt(a[1]))}
+function render(){
+ const all=Object.values(rooms),today=all.filter(r=>isToday(r.createdAt));
+ $("total").textContent=today.length;$("waiting").textContent=today.filter(r=>(r.status||"waiting")==="waiting").length;$("playing").textContent=today.filter(r=>r.status==="playing").length;$("finished").textContent=today.filter(r=>r.status==="finished").length;
+ const entries=visibleEntries();if(!entries.length){$("roomRows").innerHTML='<tr><td colspan="11" class="empty">今天目前沒有符合條件的房間</td></tr>';return}
+ $("roomRows").innerHTML=entries.map(([code,r])=>{const p1=r.player1||{},p2=r.player2||{},[st,cls]=statusLabel(r.status),q=r.questionSeq||0,hp1=p1.hp??7,hp2=p2.hp??7,n1=p1.name||"玩家一",n2=p2.name||"玩家二";return `<tr><td class="room">${esc(code)}</td><td><span class="badge ${cls}">${st}</span></td><td class="${p1.connected?"joined":"notjoined"}">${p1.connected?"● ":"○ "}${esc(n1)}${p1.connected?"":"（未加入）"}</td><td class="${p2.connected?"joined":"notjoined"}">${p2.connected?"● ":"○ "}${p2.name?esc(n2):"等待加入"}</td><td class="hp ${hp1<=2?"low":"ok"}">${hp1} / 7</td><td class="hp ${hp2<=2?"low":"ok"}">${hp2} / 7</td><td>${q?"第 "+q+" 題":"—"}</td><td><strong>${esc(n1)}</strong>　<span class="correct">✓ ${p1.correct||0}</span> / <span class="wrong">✕ ${p1.wrong||0}</span></td><td><strong>${p2.name?esc(n2):"玩家二"}</strong>　<span class="correct">✓ ${p2.correct||0}</span> / <span class="wrong">✕ ${p2.wrong||0}</span></td><td>${levelLabel(r.level)}</td><td>${timeText(recentAt(r))}</td></tr>`}).join("")
+}
+onValue(ref(db,"rooms"),snap=>{rooms=snap.val()||{};$("connectionStatus").textContent="🟢 Firebase 即時同步中｜最後更新："+new Date().toLocaleTimeString("zh-TW",{hour12:false});render()},err=>{$("connectionStatus").textContent="🔴 Firebase 讀取失敗："+err.message});
+document.querySelectorAll(".filter").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".filter").forEach(b=>b.classList.remove("active"));btn.classList.add("active");currentFilter=btn.dataset.filter;render()}));
+$("refreshBtn").onclick=render;
+</script></body></html>
