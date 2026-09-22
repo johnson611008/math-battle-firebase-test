@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>班級成績中心｜乘法公式街機格鬥挑戰</title>
+<style>
+:root{--bg:#071522;--panel:#10253a;--line:#31506c;--gold:#ffd23f;--green:#27e486;--red:#ff6158;--muted:#9eb4c8}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#061321,#091b2b);color:#fff;font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:1500px;margin:auto;padding:20px}
+header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap}
+h1{margin:0;color:var(--gold);font-size:clamp(28px,4vw,48px)}
+.sub{color:#a9c0d5;margin-top:8px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+button,a.btn{border:1px solid #4b6e8d;background:#122a42;color:#fff;border-radius:12px;padding:11px 16px;font-weight:900;font-size:16px;text-decoration:none;cursor:pointer}
+button.active{border-color:var(--gold);color:var(--gold);background:#29425a}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.card small{color:#a9c0d5;font-size:16px}.card strong{display:block;font-size:38px;margin-top:8px}
+.toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.sync{color:#b7c9da}.dot{color:#00dd82}
+.tablebox{overflow:auto;border:1px solid var(--line);border-radius:18px;background:#071421}
+table{width:100%;border-collapse:collapse;min-width:1000px}
+th{background:#122b46;color:#d8ebff;padding:14px 12px;white-space:nowrap}
+td{padding:14px 12px;border-top:1px solid #223e57;text-align:center;font-size:17px}
+td.name{text-align:left;font-weight:900;color:#fff}
+.good{color:var(--green);font-weight:900}.bad{color:var(--red);font-weight:900}.gold{color:var(--gold);font-weight:900}
+.empty{padding:50px;text-align:center;color:#9eb4c8}
+.note{color:#9eb4c8;margin:15px 4px;line-height:1.7}
+@media(max-width:850px){.cards{grid-template-columns:1fr 1fr}.wrap{padding:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>📊 班級成績中心</h1>
+    <div class="sub">乘法公式街機格鬥挑戰｜依學生姓名彙整 Firebase 對戰紀錄</div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="teacher.html">← 教師即時監看</a>
+    <a class="btn" href="index.html">⌂ 回遊戲首頁</a>
+    <button id="refreshBtn">↻ 重新整理</button>
+  </div>
+</header>
+
+<section class="cards">
+  <div class="card"><small>今日參與學生</small><strong id="studentCount">0</strong></div>
+  <div class="card"><small>今日完成對戰</small><strong id="battleCount">0</strong></div>
+  <div class="card"><small>今日有效搶答</small><strong id="answerCount">0</strong></div>
+  <div class="card"><small>全班平均正確率</small><strong id="classAccuracy">0%</strong></div>
+</section>
+
+<div class="toolbar">
+  <div class="tabs">
+    <button class="active" data-mode="today">今天</button>
+    <button data-mode="all">全部歷史</button>
+  </div>
+  <div class="sync"><span class="dot">●</span> Firebase 即時同步中｜最後更新：<span id="updated">--:--:--</span></div>
+</div>
+
+<div class="tablebox">
+<table>
+<thead>
+<tr>
+  <th>姓名</th><th>對戰場次</th><th>勝</th><th>敗</th><th>答對</th><th>答錯</th><th>搶答數</th><th>正確率</th>
+</tr>
+</thead>
+<tbody id="rows"></tbody>
+</table>
+<div id="empty" class="empty" style="display:none">目前沒有可統計的對戰資料</div>
+</div>
+
+<div class="note">
+※ 第一版以「姓名」彙整；同名學生會合併計算。<br>
+※ 勝敗只計算已結束且 Firebase 已記錄 winner 的房間；答對／答錯為學生實際搶到作答權的次數。
+</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBm52fxefQU3JCmyEnCAtqvrUgZguBgiEI",
+  authDomain: "math-battle-game-8d3f0.firebaseapp.com",
+  databaseURL: "https://math-battle-game-8d3f0-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "math-battle-game-8d3f0",
+  storageBucket: "math-battle-game-8d3f0.firebasestorage.app",
+  messagingSenderId: "386611139677",
+  appId: "1:386611139677:web:d3dd978c394fd9b73969b4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+let allRooms = {};
+let mode = "today";
+
+function isToday(ts){
+  if(!ts) return false;
+  const d = new Date(ts), n = new Date();
+  return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
+}
+function n(v){ return Number(v)||0; }
+function esc(s){ return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+function render(){
+  const rooms = Object.values(allRooms||{}).filter(r=>{
+    if(mode==="all") return true;
+    return isToday(r.createdAt || r.startedAt || r.finishedAt);
+  });
+
+  const map = new Map();
+  let finishedBattles = 0;
+
+  function ensure(name){
+    if(!map.has(name)) map.set(name,{name,games:0,wins:0,losses:0,correct:0,wrong:0});
+    return map.get(name);
+  }
+
+  rooms.forEach(r=>{
+    const p1=r.player1||{}, p2=r.player2||{};
+    const validBattle = !!(p1.name && p2.name);
+    if(validBattle){
+      const a=ensure(p1.name), b=ensure(p2.name);
+      a.games++; b.games++;
+      a.correct+=n(p1.correct); a.wrong+=n(p1.wrong);
+      b.correct+=n(p2.correct); b.wrong+=n(p2.wrong);
+
+      if(r.status==="finished" && (r.winner===1 || r.winner===2)){
+        finishedBattles++;
+        if(r.winner===1){a.wins++;b.losses++} else {b.wins++;a.losses++}
+      }
+    }
+  });
+
+  const arr=[...map.values()].map(x=>{
+    x.answers=x.correct+x.wrong;
+    x.acc=x.answers?x.correct/x.answers*100:0;
+    return x;
+  }).sort((a,b)=>b.wins-a.wins || b.acc-a.acc || b.correct-a.correct || a.name.localeCompare(b.name,"zh-Hant"));
+
+  const totalCorrect=arr.reduce((s,x)=>s+x.correct,0);
+  const totalWrong=arr.reduce((s,x)=>s+x.wrong,0);
+  const totalAnswers=totalCorrect+totalWrong;
+  document.getElementById("studentCount").textContent=arr.length;
+  document.getElementById("battleCount").textContent=finishedBattles;
+  document.getElementById("answerCount").textContent=totalAnswers;
+  document.getElementById("classAccuracy").textContent=totalAnswers ? (totalCorrect/totalAnswers*100).toFixed(1)+"%" : "0%";
+
+  const tbody=document.getElementById("rows");
+  tbody.innerHTML=arr.map(x=>`<tr>
+    <td class="name">${esc(x.name)}</td>
+    <td>${x.games}</td>
+    <td class="good">${x.wins}</td>
+    <td class="bad">${x.losses}</td>
+    <td class="good">${x.correct}</td>
+    <td class="bad">${x.wrong}</td>
+    <td>${x.answers}</td>
+    <td class="gold">${x.acc.toFixed(1)}%</td>
+  </tr>`).join("");
+  document.getElementById("empty").style.display=arr.length?"none":"block";
+  document.getElementById("updated").textContent=new Date().toLocaleTimeString("zh-TW",{hour12:false});
+}
+
+onValue(ref(db,"rooms"), snap=>{
+  allRooms=snap.val()||{};
+  render();
+});
+
+document.querySelectorAll("[data-mode]").forEach(btn=>btn.onclick=()=>{
+  mode=btn.dataset.mode;
+  document.querySelectorAll("[data-mode]").forEach(b=>b.classList.toggle("active",b===btn));
+  render();
+});
+document.getElementById("refreshBtn").onclick=()=>location.reload();
+</script>
+</body>
+</html>
